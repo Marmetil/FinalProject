@@ -1,0 +1,36 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    username: root
+    password: MySQLpassword123
+    url:
+     jdbc:mysql://localhost:3306/search_engine?useSSL=false&require
+      eSSL=false&allowPublicKeyRetrieval=true
+  jpa:
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL8Dialect
+    hibernate:
+      ddl-auto: create
+    show-sql: true
+
+indexing-settings:
+  sites:
+    - url: https://laserbeauty.kz
+      name: Laser
+#    - url: https://playback.ru
+#      name: PlayBack
+
+#    - url: https://rklinik.kz
+#      name: Rakhat
+
+
+
+#    - url: https://www.lenta.ru
+#      name: Лента.ру
+#    - url: https://www.skillbox.ru
+#      name: Skillbox
+#    - url: https://www.playback.ru
+#      name: PlayBack.Ru
