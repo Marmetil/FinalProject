@@ -7,7 +7,8 @@ import java.util.List;
 @Data
 public class SearchingResponse {
     private boolean result;
-    private List <SearchingData> searchingDataList;
+    private int count;
+    private List <SearchingData> data;
     private String error;
 
 }

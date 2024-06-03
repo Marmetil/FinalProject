@@ -77,13 +77,13 @@ public class ApiController {
                                                        @RequestParam(required = false, defaultValue = "0") int offset,
                                                        @RequestParam(required = false, defaultValue = "20") int limit) throws IOException {
         if(site == null){
-            return ResponseEntity.ok(searchingService.getSearchingResponse(query, siteList.getSites()));
+            return ResponseEntity.ok(searchingService.getSearchingResponse(query, siteList.getSites(), 2, 3));
             }
 
         else {
             List<Site> newSiteList = new ArrayList<>();
             newSiteList.add(site);
-            return ResponseEntity.ok(searchingService.getSearchingResponse(query, newSiteList));
+            return ResponseEntity.ok(searchingService.getSearchingResponse(query, newSiteList, 2, 3));
         }
 
 }

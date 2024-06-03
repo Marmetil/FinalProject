@@ -16,11 +16,12 @@ public class LuceneMain {
 
 
     public static void main(String[] args) throws IOException {
-        System.out.println("");
+//        System.out.println("");
 //        LemmaCounter lemmaCounter = new LemmaCounter();
-//        LuceneMorphology luceneMorph = new RussianLuceneMorphology();
-//        List<String> wordBaseForms = luceneMorph.getNormalForms("золотая");
-//        wordBaseForms.forEach(System.out::println);
+        LuceneMorphology luceneMorph = new RussianLuceneMorphology();
+        List<String> wordBaseForms = luceneMorph.getNormalForms("love");
+//        System.out.println(wordBaseForms);
+        wordBaseForms.forEach(System.out::println);
 //        List<String> partOfSpeech = luceneMorph.getMorphInfo("по");
 //        partOfSpeech.forEach(System.out::println);
 //        System.out.println(lemmaCounter.splitTextIntoWords("шла саша по шоссе в магазин за красивыми игрушками"));
