@@ -3,7 +3,9 @@ package searchengine.services;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import searchengine.config.Referrer;
 import searchengine.config.Site;
+import searchengine.config.UserAgent;
 import searchengine.model.SiteMapBuilder;
 import searchengine.config.SitesList;
 import searchengine.model.*;
@@ -26,6 +28,7 @@ public class IndexingService {
     private final SitesList siteList;
     private final LemmaRepository lemmaRepository;
     private final IndexRepository indexRepository;
+
     private static final List<ForkJoinPool> forkJoinPoolList = new ArrayList<>();
 
 
@@ -39,7 +42,7 @@ public class IndexingService {
         for (Site site : siteList.getSites()){
             SiteEntity siteEntity = siteRepository.findIdByName(site.getName());
             if(!(siteEntity == null)) {
-                List<Index> indexesToDelete = indexRepository.findIndexBySiteId(siteEntity);
+                List<Index> indexesToDelete = indexRepository.findIndexBySiteId(siteEntity.getId());
                 for (Index index : indexesToDelete){
                     indexRepository.delete(index);
                 }
@@ -59,7 +62,8 @@ public class IndexingService {
         for (SiteEntity site : siteEntities){
             SiteMap siteMap = new SiteMap(site.getUrl());
             Site newSite = makeSite(site);
-            SiteMapBuilder task = new SiteMapBuilder(siteMap, siteRepository, pageRepository, newSite, indexingStateRepository, siteList, lemmaRepository, indexRepository);
+            SiteMapBuilder task = new SiteMapBuilder(siteMap, siteRepository, pageRepository, newSite, indexingStateRepository,
+                    siteList, lemmaRepository, indexRepository);
                    ForkJoinPool forkJoinPool = new ForkJoinPool();
                    forkJoinPool.invoke(task);
                    forkJoinPoolList.add(forkJoinPool);
@@ -94,7 +98,8 @@ public class IndexingService {
     }
 
     public void IndexPage(String url) throws IOException {
-        LemmaCounter lemmaCounter = new LemmaCounter(siteRepository, pageRepository, siteList, lemmaRepository,indexRepository);
+        LemmaCounter lemmaCounter = new LemmaCounter(siteRepository, pageRepository,
+                siteList, lemmaRepository,indexRepository);
         lemmaCounter.IndexPage(url);
     }
 

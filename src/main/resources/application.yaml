@@ -18,22 +18,20 @@ spring:
 
 indexing-settings:
   sites:
-    - url: https://laserbeauty.kz
-      name: Laser
-#    - url: https://playback.ru
-#      name: PlayBack
-
-#    - url: https://rklinik.kz
-#      name: Rakhat
-
-
-
-#    - url: https://www.lenta.ru
-#      name: Лента.ру
-#    - url: https://www.skillbox.ru
-#      name: Skillbox
+    - url: https://playback.ru
+      name: PlayBack
+    - url: https://www.lenta.ru
+      name: Lenta
+    - url: https://www.skillbox.ru
+      name: Skillbox
+    - url: https://dombulgakova.ru
+      name: Bulgakov
+#    - url: https://volochek.life
+#      name: Volochek
 #    - url: https://www.playback.ru
 #      name: PlayBack.Ru
+#    - url: https://rklinik.kz
+#      name: Rakhat
+#    - url: https://laserbeauty.kz
+#      name: Laser
 
-user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 YaBrowser/24.4.0.0 Safari/537.36
-referrer: http://google.com

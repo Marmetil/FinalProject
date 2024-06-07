@@ -35,8 +35,6 @@ public class SiteMapBuilder  extends RecursiveAction {
     private final LemmaRepository lemmaRepository;
     private final IndexRepository indexRepository;
 
-
-
     @Override
     protected void compute() {
         if(indexingStateRepository.findByIndexing("YES") == null) {
@@ -66,7 +64,8 @@ public class SiteMapBuilder  extends RecursiveAction {
             }
             pageRepository.save(page);
             if(page.getCode() < 400) {
-                LemmaWriter lemmaWriter = new LemmaWriter(siteRepository, pageRepository, sitesList, lemmaRepository, indexRepository, link);
+                LemmaWriter lemmaWriter = new LemmaWriter(siteRepository, pageRepository,
+                        sitesList, lemmaRepository, indexRepository, link);
                 lemmaWriter.start();
                 log.info("Запущен поток " + lemmaWriter.getName());
                 try {
@@ -87,7 +86,8 @@ public class SiteMapBuilder  extends RecursiveAction {
         List<SiteMapBuilder> taskList = new ArrayList<>();
 
             for (SiteMap child : siteMap.getChildLinks()) {
-                SiteMapBuilder task = new SiteMapBuilder(child, siteRepository, pageRepository, site, indexingStateRepository, sitesList, lemmaRepository, indexRepository);
+                SiteMapBuilder task = new SiteMapBuilder(child, siteRepository, pageRepository, site, indexingStateRepository,
+                        sitesList, lemmaRepository, indexRepository);
                 task.fork();
                 taskList.add(task);
             }
@@ -96,13 +96,15 @@ public class SiteMapBuilder  extends RecursiveAction {
             }
 
     }
-    public static ConcurrentSkipListSet<String> linksExecutor (String url){
+    public ConcurrentSkipListSet<String> linksExecutor (String url){
         ConcurrentSkipListSet<String> links = new ConcurrentSkipListSet<>();
 
         String regex = urlRootFinder(url) + "/[^#,\\s]*";
         try {
             Thread.sleep(500);
             Document document = Jsoup.connect(url)
+                    .userAgent("Mozilla/5.0 (Windows; U; WindowsNT 5.1; en-US; rv1.8.1.6) Gecko/20070725 Firefox/2.0.0.6")
+                    .referrer("http://www.google.com")
                     .ignoreHttpErrors(true)
                     .ignoreContentType(true)
                     .followRedirects(false).get();

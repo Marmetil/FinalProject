@@ -23,8 +23,8 @@ public interface IndexRepository extends JpaRepository<Index, Integer> {
     @Modifying
     @Query("SELECT  i FROM Index i WHERE i.id IN " +
             "(SELECT i.id FROM Index i INNER JOIN Page p ON p.id = i.pageId.id " +
-            " INNER JOIN SiteEntity s ON s.id = p.siteId.id WHERE p.siteId.id = :site_id)")
-    List<Index> findIndexBySiteId(@Param("site_id") SiteEntity  siteEntity);
+            "INNER JOIN SiteEntity s ON s.id = p.siteId.id WHERE p.siteId.id = :site_id)")
+    List<Index> findIndexBySiteId(@Param("site_id") Integer  siteId);
 
     @Modifying
     @Query("SELECT i FROM Index i WHERE i.lemmaId.id = :lemma_id")

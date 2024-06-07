@@ -148,32 +148,22 @@ public class SearchingService {
             List<RelativePageRelevance> pageListToResponse = findPages(query, siteList);
             List<SearchingData> searchingDataList = new ArrayList<>();
         try {
-            if (pageListToResponse == null) {
-                searchingResponse.setResult(true);
-                searchingResponse.setData(Collections.EMPTY_LIST);
-            }
+
             if (pageListToResponse.isEmpty()) {
                 searchingResponse.setResult(false);
                 searchingResponse.setError("Задан пустой поисковый запрос");
                 searchingResponse.setData(null);
             } else {
-                for (RelativePageRelevance relativePageRelevance : pageListToResponse) {
-                        String siteUrl = relativePageRelevance.getPage().getSiteId().getUrl();
-                        String pagePath = relativePageRelevance.getPage().getPath();
-                        String pageUrl = siteUrl + pagePath;
-                        SearchingData searchingData = new SearchingData();
-                        searchingData.setSite(siteUrl);
-                        searchingData.setSiteName(relativePageRelevance.getPage().getSiteId().getName());
-                        searchingData.setRelevance(relativePageRelevance.getRelativeRelevance());
-                        searchingData.setTitle(pageTitleGetter(pageUrl));
-                        searchingData.setSnippet(snippetGetter(query, pageUrl));
-                        searchingData.setUrl(relativePageRelevance.getPage().getPath());
-                        searchingDataList.add(searchingData);
-                }
+                searchingDataList = searchingDataListMaker(pageListToResponse, query);
                 List<SearchingData> displaySearchingDataList = new ArrayList<>();
-
-                for(int i = offset; i < offset + limit; i++){
-                   displaySearchingDataList.add(searchingDataList.get(i));
+                if(offset + limit <= searchingDataList.size()) {
+                    for (int i = offset; i < offset + limit; i++) {
+                        displaySearchingDataList.add(searchingDataList.get(i));
+                    }
+                } else {
+                    for (int i = offset; i < searchingDataList.size(); i++) {
+                        displaySearchingDataList.add(searchingDataList.get(i));
+                    }
                 }
 
                 searchingResponse.setResult(true);
@@ -192,7 +182,6 @@ public class SearchingService {
     }
 
  private String snippetGetter(String query, String pageUrl) throws IOException {
-        LuceneMorphology luceneMorph = new RussianLuceneMorphology();
         String text = pageTextGetter(pageUrl);
         Map<WordPosition, List<String>> wordLemmaMap = wordLemmaMapMaker(text);
         Map<WordPosition, List<String>> requestedWordsLemmaMap = new HashMap<>();
@@ -211,30 +200,8 @@ public class SearchingService {
             }
         }
         sortedRequestedWords.sort(Comparator.comparing(WordPosition::getIndexOfWord));
-
         String snippet = snippetMaker(sortedRequestedWords, text, snippetSize, partialSnippetSize);
-        String snippet1 = snippet.replaceAll("[^\s^а-яА-Я]", "");
-        String[] snippetWords = snippet1.split("\s+");
-        Map<String, List<String>> sippetLemmasMap = new HashMap<>();
-        for (String snippetWord : snippetWords){
-            try {
-                List<String> partOfSpeech = luceneMorph.getMorphInfo(snippetWord.toLowerCase());
-                partOfSpeech.stream().filter(p -> !p.toUpperCase().contains("СОЮЗ") && !p.toUpperCase().contains("МЕЖД") && !p.toUpperCase().contains("ПРЕДЛ"))
-                        .map(p -> luceneMorph.getNormalForms(snippetWord.toLowerCase()))
-                        .forEach(lemmas -> sippetLemmasMap.put(snippetWord, lemmas));
-            }  catch (ArrayIndexOutOfBoundsException | WrongCharaterException exception){
-                continue;
-            }
-        }
-
-        for (Map.Entry<String, List<String>> entry : sippetLemmasMap.entrySet()){
-            for (Map.Entry<WordPosition, List<String>> entry1 : requestedWordsLemmaMap.entrySet()){
-                if(entry.getValue().equals(entry1.getValue())){
-                   snippet = snippet.replaceAll(entry.getKey(), "<b>" + entry.getKey() + "</b>");
-                }
-            }
-        }
-        return snippet;
+        return wordsHighLighter(snippet, requestedWordsLemmaMap);
     }
     private String pageTextGetter(String url) throws IOException {
         Document document = Jsoup.connect(url).get();
@@ -285,6 +252,47 @@ public class SearchingService {
             }
         }
         return stringBuilder.toString();
+    }
+    private List<SearchingData> searchingDataListMaker(List<RelativePageRelevance> pageListToResponse, String query) throws IOException {
+        List<SearchingData> searchingDataList = new ArrayList<>();
+        for (RelativePageRelevance relativePageRelevance : pageListToResponse) {
+            String siteUrl = relativePageRelevance.getPage().getSiteId().getUrl();
+            String pagePath = relativePageRelevance.getPage().getPath();
+            String pageUrl = siteUrl + pagePath;
+            SearchingData searchingData = new SearchingData();
+            searchingData.setSite(siteUrl);
+            searchingData.setSiteName(relativePageRelevance.getPage().getSiteId().getName());
+            searchingData.setRelevance(relativePageRelevance.getRelativeRelevance());
+            searchingData.setTitle(pageTitleGetter(pageUrl));
+            searchingData.setSnippet(snippetGetter(query, pageUrl));
+            searchingData.setUrl(relativePageRelevance.getPage().getPath());
+            searchingDataList.add(searchingData);
+        } return searchingDataList;
+    }
+
+    private String wordsHighLighter(String snippet, Map<WordPosition, List<String>> requestedWordsLemmaMap) throws IOException {
+        LuceneMorphology luceneMorph = new RussianLuceneMorphology();
+        String snippet1 = snippet.replaceAll("[^\s^а-яА-Я]", "");
+        String[] snippetWords = snippet1.split("\s+");
+        Map<String, List<String>> sippetLemmasMap = new HashMap<>();
+        for (String snippetWord : snippetWords){
+            try {
+                List<String> partOfSpeech = luceneMorph.getMorphInfo(snippetWord.toLowerCase());
+                partOfSpeech.stream().filter(p -> !p.toUpperCase().contains("СОЮЗ") && !p.toUpperCase().contains("МЕЖД") && !p.toUpperCase().contains("ПРЕДЛ"))
+                        .map(p -> luceneMorph.getNormalForms(snippetWord.toLowerCase()))
+                        .forEach(lemmas -> sippetLemmasMap.put(snippetWord, lemmas));
+            }  catch (ArrayIndexOutOfBoundsException | WrongCharaterException exception){
+                continue;
+            }
+        }
+
+        for (Map.Entry<String, List<String>> entry : sippetLemmasMap.entrySet()){
+            for (Map.Entry<WordPosition, List<String>> entry1 : requestedWordsLemmaMap.entrySet()){
+                if(entry.getValue().equals(entry1.getValue())){
+                    snippet = snippet.replaceAll(entry.getKey(), "<b>" + entry.getKey() + "</b>");
+                }
+            }
+        } return snippet;
     }
 }
 

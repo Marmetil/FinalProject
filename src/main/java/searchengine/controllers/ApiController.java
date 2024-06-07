@@ -1,6 +1,8 @@
 package searchengine.controllers;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.repository.query.Param;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import searchengine.config.Site;
@@ -9,6 +11,7 @@ import searchengine.dto.Message;
 import searchengine.dto.seach.SearchingResponse;
 import searchengine.dto.statistics.StatisticsResponse;
 import searchengine.model.IndexingState;
+import searchengine.model.SiteEntity;
 import searchengine.repositories.IndexingStateRepository;
 import searchengine.repositories.PageRepository;
 import searchengine.repositories.SiteRepository;
@@ -35,8 +38,15 @@ public class ApiController {
 
 
     @GetMapping("/statistics")
-    public ResponseEntity<StatisticsResponse> statistics() {
-        return ResponseEntity.ok(statisticsService.getStatistics());
+    public ResponseEntity/*<StatisticsResponse>*/ statistics()  throws IOException {
+        try {
+            return ResponseEntity.ok(statisticsService.getStatistics());
+        } catch (NullPointerException exception){
+            return new ResponseEntity<>(new Message(false,
+                    "Нет проиндексированных страниц"), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+
+
     }
 
     @GetMapping("/startIndexing")
@@ -59,34 +69,39 @@ public class ApiController {
         return new Message(true);
     }
     @PostMapping("/indexPage")
-    public Message indexPage(String url) throws IOException {
-        ArrayList<String> siteUrls = new ArrayList<>();
-        for (Site site : siteList.getSites()) {
-            siteUrls.add(site.getUrl());
-        }
-        if(!siteUrls.contains(indexingService.urlRootFinder(url))){
-            return new Message(false, "Данная страница находится за пределами сайтов, указанных в конфигурационном файле");
+    public ResponseEntity indexPage(String url) throws IOException {
+            ArrayList<String> siteUrls = new ArrayList<>();
+            for (Site site : siteList.getSites()) {
+                siteUrls.add(site.getUrl());
+            }
+            if (!siteUrls.contains(indexingService.urlRootFinder(url))) {
+                return new ResponseEntity( new Message(false,
+                        "Данная страница находится за пределами сайтов, указанных в конфигурационном файле"), HttpStatus.OK);
 
-        } else {
-            indexingService.IndexPage(url);
-        } return new Message(true);
+            } else {
+                indexingService.IndexPage(url);
+            }
+            return new ResponseEntity(new Message(true), HttpStatus.OK);
 
     }
 @GetMapping("/search")
-    public ResponseEntity<SearchingResponse> Searching(@RequestParam String query, @RequestParam(required = false) Site site,
+    public ResponseEntity<SearchingResponse> Searching(@RequestParam String query, @RequestParam(required = false) String site,
                                                        @RequestParam(required = false, defaultValue = "0") int offset,
                                                        @RequestParam(required = false, defaultValue = "20") int limit) throws IOException {
         if(site == null){
-            return ResponseEntity.ok(searchingService.getSearchingResponse(query, siteList.getSites(), 2, 3));
+            return ResponseEntity.ok(searchingService.getSearchingResponse(query, siteList.getSites(), offset, limit));
             }
 
         else {
             List<Site> newSiteList = new ArrayList<>();
-            newSiteList.add(site);
-            return ResponseEntity.ok(searchingService.getSearchingResponse(query, newSiteList, 2, 3));
+            for(Site site1 : siteList.getSites()){
+                if(site1.getUrl().equals(site)){
+                    newSiteList.add(site1);
+                }
+            }
+            return ResponseEntity.ok(searchingService.getSearchingResponse(query, newSiteList, offset, limit));
         }
-
-}
+    }
 }
 
 

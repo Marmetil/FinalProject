@@ -9,8 +9,10 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.springframework.stereotype.Repository;
 import org.springframework.stereotype.Service;
+import searchengine.config.Referrer;
 import searchengine.config.Site;
 import searchengine.config.SitesList;
+import searchengine.config.UserAgent;
 import searchengine.model.*;
 import searchengine.repositories.*;
 
@@ -32,6 +34,7 @@ public class LemmaCounter {
     private final SitesList siteList;
     private final LemmaRepository lemmaRepository;
     private final IndexRepository indexRepository;
+
     public HashMap<String, Integer> splitTextIntoWords(String text) throws IOException {
         text = text.replaceAll("[^\s^а-яА-Я]", "");
         String [] words = text.toLowerCase().split("\s+");
@@ -86,7 +89,10 @@ public class LemmaCounter {
     }
 
     private String htmlGetter(String url) throws IOException{
-        Document document = Jsoup.connect(url).get();
+        Document document = Jsoup.connect(url)
+                .userAgent("Mozilla/5.0 (Windows; U; WindowsNT 5.1; en-US; rv1.8.1.6) Gecko/20070725 Firefox/2.0.0.6")
+                .referrer("http://www.google.com")
+                .get();
         return document.html();
     }
         private Site makeSite(SiteEntity siteEntity){
