@@ -8,18 +8,13 @@ import org.apache.lucene.morphology.russian.RussianLuceneMorphology;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.springframework.stereotype.Service;
-import org.thymeleaf.util.StringUtils;
 import searchengine.dto.seach.AbsPageRelevance;
 import searchengine.dto.seach.RelativePageRelevance;
 import searchengine.config.Site;
 import searchengine.dto.seach.SearchingData;
 import searchengine.dto.seach.SearchingResponse;
 import searchengine.model.*;
-import searchengine.repositories.IndexRepository;
-import searchengine.repositories.LemmaRepository;
-import searchengine.repositories.PageRepository;
-import searchengine.repositories.SiteRepository;
-
+import searchengine.repositories.*;
 import java.io.IOException;
 import java.util.*;
 
@@ -31,15 +26,21 @@ public class SearchingService {
     private final PageRepository pageRepository;
     private final IndexRepository indexRepository;
     private final SiteRepository siteRepository;
-    private List<String> splitTextIntoWords(String text) throws IOException {
-        text = text.replaceAll("[^\s^а-яА-Я]", "");
-        String [] words = text.toLowerCase().split("\s+");
+    private LuceneMorphology luceneMorph;
+    {
+        try {
+            luceneMorph = new RussianLuceneMorphology();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private List<String> splitTextIntoWords(String query) throws IOException {
+        query = query.replaceAll("[^\s^а-яА-Я]", "");
+        String [] words = query.toLowerCase().split("\s+");
         ArrayList<String> allWords = new ArrayList<>(Arrays.asList(words));
         ArrayList<String> allLemmas = new ArrayList<>();
-
         HashMap<String, Integer> lemmaCount = new HashMap<>();
-        LuceneMorphology luceneMorph = new RussianLuceneMorphology();
-
         for (String word : allWords){
             List<String> partOfSpeech = luceneMorph.getMorphInfo(word);
             partOfSpeech.forEach(p-> {
@@ -57,16 +58,15 @@ public class SearchingService {
         }
         List<String> requestedLemmas = new ArrayList<>();
         lemmaCount.forEach((key, value) -> requestedLemmas.add(key));
-
         return requestedLemmas;
     }
 
-    private List<String> excludeFrequentLemma(String text) throws IOException {
-        List<String> requestedLemmas = splitTextIntoWords(text);
+    private List<String> excludeFrequentLemma(String query, SiteEntity siteEntity) throws IOException {
+        List<String> requestedLemmas = splitTextIntoWords(query);
         List<String> uniqueLemmas = new ArrayList<>();
-        int pageCount = (int) pageRepository.count();
+        int pageCount = pageRepository.countBySiteId(siteEntity);
         for (String lemma : requestedLemmas){
-            int frequency = lemmaRepository.findByLemma(lemma).getFrequency();
+            int frequency = lemmaRepository.findByLemmaAndSiteId(lemma, siteEntity).getFrequency();
             float quotient = (float) frequency /pageCount;
             if (quotient < 0.8  ){
                 uniqueLemmas.add(lemma);
@@ -74,29 +74,26 @@ public class SearchingService {
         } return uniqueLemmas;
     }
 
-    private List<Lemma> sortLemmas(String text) throws IOException {
-        List<String> uniqueLemmas = excludeFrequentLemma(text);
+    private List<Lemma> sortLemmas(String query, SiteEntity siteEntity) throws IOException {
+        List<String> uniqueLemmas = excludeFrequentLemma(query, siteEntity);
         List<Lemma> sortedLemmas = new ArrayList<>();
         for (String lemma : uniqueLemmas){
-            Lemma lemma1 = lemmaRepository.findByLemma(lemma);
+            Lemma lemma1 = lemmaRepository.findByLemmaAndSiteId(lemma, siteEntity);
             sortedLemmas.add(lemma1);
         }
         sortedLemmas.sort(Comparator.comparing(Lemma::getFrequency));
        return sortedLemmas;
     }
 
-    private List findPages(String text, List<Site> siteList) throws IOException {
+    private List findPages(String text, SiteEntity siteEntity) throws IOException {
         try {
-            List<Lemma> sortedLemmas = sortLemmas(text);
-            Lemma firstLemma = sortedLemmas.get(0);
-            Integer firstLemmaId = lemmaRepository.findByLemma(firstLemma.getLemma()).getId();
             List<Page> pageIdList = new ArrayList<>();
-            for (Site site : siteList) {
-                SiteEntity siteEntity = siteRepository.findIdByName(site.getName());
-                List<Index> indexList = indexRepository.findIndexByLemmaAndSiteId(siteEntity.getId(), firstLemmaId);
-                for (Index index : indexList) {
-                    pageIdList.add(index.getPageId());
-                }
+            List<Lemma> sortedLemmas = sortLemmas(text, siteEntity);
+            Lemma firstLemma = sortedLemmas.get(0);
+            Integer firstLemmaId = lemmaRepository.findByLemmaAndSiteId(firstLemma.getLemma(), siteEntity).getId();
+            List<Index> indexList = indexRepository.findIndexByLemmaAndSiteId(siteEntity.getId(), firstLemmaId);
+            for (Index index : indexList) {
+                pageIdList.add(index.getPageId());
             }
             for (int i = 1; i < sortedLemmas.size(); i++) {
                 List<Page> newPageIdList = new ArrayList<>();
@@ -108,72 +105,50 @@ public class SearchingService {
                     pageIdList = newPageIdList;
                 }
             }
-
             if (pageIdList.isEmpty()) {
                 return Collections.EMPTY_LIST;
             } else {
-                List<RelativePageRelevance> relativePageRelevanceList = new ArrayList<>();
-                float rank = 0;
-                List<AbsPageRelevance> absPageRelevanceList = new ArrayList<>();
-                for (Page page : pageIdList) {
-                    for (Lemma lemma : sortedLemmas) {
-                        rank = rank + indexRepository.findByLemmaIdAndPageId(lemma, page).getRank();
-                    }
-                    float absRelevance = rank;
-                    AbsPageRelevance absPageRelevance = new AbsPageRelevance(page, absRelevance);
-                    absPageRelevanceList.add(absPageRelevance);
-                }
-                absPageRelevanceList.sort(Comparator.comparing(AbsPageRelevance::getAbsRelevance));
-
-                for (AbsPageRelevance absPageRelevance : absPageRelevanceList) {
-                    AbsPageRelevance maxAbsPageRelevance = absPageRelevanceList.get(absPageRelevanceList.size() - 1);
-                    float maxAbsRelevance = maxAbsPageRelevance.getAbsRelevance();
-                    float relativeRelevance = absPageRelevance.getAbsRelevance() / maxAbsRelevance;
-                    RelativePageRelevance relativePageRelevance = new RelativePageRelevance(absPageRelevance.getPage(), relativeRelevance);
-                    relativePageRelevanceList.add(relativePageRelevance);
-                }
-                relativePageRelevanceList.sort(Comparator.comparing(RelativePageRelevance::getRelativeRelevance).reversed());
-                return relativePageRelevanceList;
+                return relativePageGetter(pageIdList, sortedLemmas);
             }
-
         } catch (NullPointerException | ConcurrentModificationException | IndexOutOfBoundsException e){
             return null;
         }
-
     }
 
-    public SearchingResponse getSearchingResponse(String query, List<Site> siteList, int offset, int limit) throws IOException {
-
+        public SearchingResponse getSearchingResponse(String query, List<Site> siteList, int offset, int limit) throws IOException {
             SearchingResponse searchingResponse = new SearchingResponse();
-            List<RelativePageRelevance> pageListToResponse = findPages(query, siteList);
-            List<SearchingData> searchingDataList = new ArrayList<>();
-        try {
-
-            if (pageListToResponse.isEmpty()) {
+            List<RelativePageRelevance> pageListToResponse = new ArrayList<>();
+            for(Site site : siteList){
+                List<RelativePageRelevance> sitePageListToResponse = findPages(query, siteRepository.findIdByName(site.getName()));
+                if(sitePageListToResponse != null){
+                    pageListToResponse.addAll(sitePageListToResponse);
+                }
+            }
+            try {
+                if (pageListToResponse.isEmpty()) {
                 searchingResponse.setResult(false);
                 searchingResponse.setError("Задан пустой поисковый запрос");
                 searchingResponse.setData(null);
-            } else {
-                searchingDataList = searchingDataListMaker(pageListToResponse, query);
-                List<SearchingData> displaySearchingDataList = new ArrayList<>();
-                if(offset + limit <= searchingDataList.size()) {
-                    for (int i = offset; i < offset + limit; i++) {
-                        displaySearchingDataList.add(searchingDataList.get(i));
-                    }
                 } else {
-                    for (int i = offset; i < searchingDataList.size(); i++) {
-                        displaySearchingDataList.add(searchingDataList.get(i));
+                    List<SearchingData> displaySearchingDataList = new ArrayList<>();
+                    if(offset + limit <= pageListToResponse.size()){
+                        List<RelativePageRelevance> newPageListToResponse = new ArrayList<>();
+                        for(int i = offset; i < offset + limit; i++){
+                            newPageListToResponse.add(pageListToResponse.get(i));
+                        }
+                        displaySearchingDataList = searchingDataListMaker(newPageListToResponse,query);
+                    }  else {
+                        displaySearchingDataList = searchingDataListMaker(pageListToResponse, query);
                     }
-                }
-
                 searchingResponse.setResult(true);
-                searchingResponse.setCount(searchingDataList.size());
+                searchingResponse.setCount(pageListToResponse.size());
                 searchingResponse.setData(displaySearchingDataList);
             }
         }catch (NullPointerException e){
             searchingResponse.setResult(true);
             searchingResponse.setData(Collections.EMPTY_LIST);
-        } return searchingResponse;
+        }
+        return searchingResponse;
     }
 
     private String pageTitleGetter(String url) throws IOException {
@@ -210,19 +185,21 @@ public class SearchingService {
     }
 
     private Map<WordPosition, List<String>> wordLemmaMapMaker(String text) throws IOException {
-        LuceneMorphology luceneMorph = new RussianLuceneMorphology();
         Map<WordPosition, List<String>> wordLemmaMap = new HashMap<>();
         String cleanText = text.replaceAll("[^\s^а-яА-Я]", "");
         String [] words = cleanText.toLowerCase().split("\s+");
         for (String word : words){
-            int indexOfWord = text.toLowerCase().indexOf(word);
-            List<String> lemmas = luceneMorph.getNormalForms(word);
-            wordLemmaMap.put(new WordPosition(indexOfWord, word), lemmas);
-        } return wordLemmaMap;
+            try {
+                int indexOfWord = text.toLowerCase().indexOf(word);
+                List<String> lemmas = luceneMorph.getNormalForms(word);
+                wordLemmaMap.put(new WordPosition(indexOfWord, word), lemmas);
+            }catch (ArrayIndexOutOfBoundsException e){
+                continue;
+            }
+        }
+        return wordLemmaMap;
     }
-
     private Map<String, List<String>> requestedLemmasGetter(String query) throws IOException {
-        LuceneMorphology luceneMorph = new RussianLuceneMorphology();
         Map<String, List<String>> requestedLemmas = new HashMap<>();
         String[] requestedWords = query.split("\s+");
         for (String word : requestedWords){
@@ -248,7 +225,7 @@ public class SearchingService {
                 end = text.indexOf(" ", start + partialSnippetSize);
                 partialSnippet = text.substring(start, end);
                 String finish = (i == sortedRequestedWords.size() - 1 ? "..." : "");
-                stringBuilder.append("...").append(partialSnippet).append(finish);
+                stringBuilder.append("... ").append(partialSnippet).append(finish);
             }
         }
         return stringBuilder.toString();
@@ -267,11 +244,11 @@ public class SearchingService {
             searchingData.setSnippet(snippetGetter(query, pageUrl));
             searchingData.setUrl(relativePageRelevance.getPage().getPath());
             searchingDataList.add(searchingData);
-        } return searchingDataList;
+        }
+        return searchingDataList;
     }
 
     private String wordsHighLighter(String snippet, Map<WordPosition, List<String>> requestedWordsLemmaMap) throws IOException {
-        LuceneMorphology luceneMorph = new RussianLuceneMorphology();
         String snippet1 = snippet.replaceAll("[^\s^а-яА-Я]", "");
         String[] snippetWords = snippet1.split("\s+");
         Map<String, List<String>> sippetLemmasMap = new HashMap<>();
@@ -285,14 +262,37 @@ public class SearchingService {
                 continue;
             }
         }
-
         for (Map.Entry<String, List<String>> entry : sippetLemmasMap.entrySet()){
             for (Map.Entry<WordPosition, List<String>> entry1 : requestedWordsLemmaMap.entrySet()){
                 if(entry.getValue().equals(entry1.getValue())){
                     snippet = snippet.replaceAll(entry.getKey(), "<b>" + entry.getKey() + "</b>");
                 }
             }
-        } return snippet;
+        }
+        return snippet;
+    }
+    private List<RelativePageRelevance> relativePageGetter(List<Page> pageIdList, List<Lemma> sortedLemmas) {
+        List<RelativePageRelevance> relativePageRelevanceList = new ArrayList<>();
+        float rank = 0;
+        List<AbsPageRelevance> absPageRelevanceList = new ArrayList<>();
+        for (Page page : pageIdList) {
+            for (Lemma lemma : sortedLemmas) {
+                rank = rank + indexRepository.findByLemmaIdAndPageId(lemma, page).getRank();
+            }
+            float absRelevance = rank;
+            AbsPageRelevance absPageRelevance = new AbsPageRelevance(page, absRelevance);
+            absPageRelevanceList.add(absPageRelevance);
+        }
+        absPageRelevanceList.sort(Comparator.comparing(AbsPageRelevance::getAbsRelevance));
+        for (AbsPageRelevance absPageRelevance : absPageRelevanceList) {
+            AbsPageRelevance maxAbsPageRelevance = absPageRelevanceList.get(absPageRelevanceList.size() - 1);
+            float maxAbsRelevance = maxAbsPageRelevance.getAbsRelevance();
+            float relativeRelevance = absPageRelevance.getAbsRelevance() / maxAbsRelevance;
+            RelativePageRelevance relativePageRelevance = new RelativePageRelevance(absPageRelevance.getPage(), relativeRelevance);
+            relativePageRelevanceList.add(relativePageRelevance);
+        }
+        relativePageRelevanceList.sort(Comparator.comparing(RelativePageRelevance::getRelativeRelevance).reversed());
+        return relativePageRelevanceList;
     }
 }
 

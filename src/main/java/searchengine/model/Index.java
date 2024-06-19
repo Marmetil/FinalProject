@@ -20,6 +20,6 @@ public class Index {
     @ManyToOne(cascade = CascadeType.MERGE)
     @JoinColumn(name = "lemma_id")
     private Lemma lemmaId;
-    @Column(name = "rating", columnDefinition = "FLOAT", nullable = false)
-    private float rank;
+    @Column(name = "rating", columnDefinition = "INT", nullable = false)
+    private int rank;
 }

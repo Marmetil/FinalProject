@@ -9,8 +9,8 @@ import org.springframework.http.HttpStatusCode;
 @Setter
 @Getter
 public class Message {
-        private boolean result;
-        private String error;
+    private boolean result;
+    private String error;
 
     public Message(boolean result) {
         this.result = result;

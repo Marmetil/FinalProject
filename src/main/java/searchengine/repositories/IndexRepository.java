@@ -17,27 +17,31 @@ import java.util.List;
 public interface IndexRepository extends JpaRepository<Index, Integer> {
     @Modifying
     @Transactional
-    @Query(value = "DELETE FROM Index i WHERE i.pageId = :page_id" )
+    @Query(value = "DELETE FROM Index i WHERE i.pageId = :page_id")
     void deleteIndex(@Param("page_id") Page page);
 
     @Modifying
     @Query("SELECT  i FROM Index i WHERE i.id IN " +
             "(SELECT i.id FROM Index i INNER JOIN Page p ON p.id = i.pageId.id " +
             "INNER JOIN SiteEntity s ON s.id = p.siteId.id WHERE p.siteId.id = :site_id)")
-    List<Index> findIndexBySiteId(@Param("site_id") Integer  siteId);
+    List<Index> findIndexBySiteId(@Param("site_id") Integer siteId);
 
     @Modifying
     @Query("SELECT i FROM Index i WHERE i.lemmaId.id = :lemma_id")
     List<Index> findByLemma(@Param("lemma_id") Lemma lemma);
 
-//    @Modifying
-//    @Query("SELECT i FROM Index i WHERE i.pageId = :page_id AND i.lemmaId = :lemma_id")
-//    Index findByLemmaAndPage(@Param("lemma_id") Lemma lemma, @Param("page_id") Page page);
     Index findByLemmaIdAndPageId(Lemma lemmaId, Page pageId);
+
     @Modifying
     @Query("SELECT  i FROM Index i WHERE i.id IN " +
             "(SELECT i.id FROM Index i INNER JOIN Page p ON p.id = i.pageId.id " +
             " INNER JOIN SiteEntity s ON s.id = p.siteId.id WHERE i.lemmaId.id = :lemma_id AND p.siteId.id = :site_id)")
-    List<Index> findIndexByLemmaAndSiteId(@Param("site_id") Integer  siteId, @Param("lemma_id") Integer lemmaId);
+    List<Index> findIndexByLemmaAndSiteId(@Param("site_id") Integer siteId, @Param("lemma_id") Integer lemmaId);
+
+    @Modifying
+    @Transactional
+    @Query(nativeQuery = true, value = "INSERT INTO index_page (page_id, lemma_id, rating)" +
+            "VALUES (:page_id, :lemma_id, :rating) ")
+    void fillInIndex(@Param("page_id") Integer page_id, @Param("lemma_id") Integer lemma_id, @Param("rating") Integer rank);
 
 }

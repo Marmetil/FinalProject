@@ -20,18 +20,18 @@ indexing-settings:
   sites:
     - url: https://playback.ru
       name: PlayBack
-    - url: https://www.lenta.ru
-      name: Lenta
-    - url: https://www.skillbox.ru
-      name: Skillbox
+    - url: https://www.svetlovka.ru
+      name: Svetlovka
+    - url: https://laserbeauty.kz
+      name: Laser
+    - url: https://rklinik.kz
+      name: Rakhat
+    - url: https://nikoartgallery.com
+      name: Niko
     - url: https://dombulgakova.ru
       name: Bulgakov
-#    - url: https://volochek.life
-#      name: Volochek
-#    - url: https://www.playback.ru
-#      name: PlayBack.Ru
-#    - url: https://rklinik.kz
-#      name: Rakhat
-#    - url: https://laserbeauty.kz
-#      name: Laser
+
+
+
+
 

@@ -21,8 +21,6 @@ import java.util.Random;
 @Service
 @RequiredArgsConstructor
 public class StatisticsServiceImpl implements StatisticsService {
-
-//    private final Random random = new Random();
     private final SitesList sites;
     private final SiteRepository siteRepository;
     private final PageRepository pageRepository;
@@ -30,17 +28,9 @@ public class StatisticsServiceImpl implements StatisticsService {
 
     @Override
     public StatisticsResponse getStatistics() {
-//        String[] statuses = { "INDEXED", "FAILED", "INDEXING" };
-//        String[] errors = {
-//                "Ошибка индексации: главная страница сайта не доступна",
-//                "Ошибка индексации: сайт не доступен",
-//                ""
-//        };
-
         TotalStatistics total = new TotalStatistics();
         total.setSites(sites.getSites().size());
         total.setIndexing(true);
-
         List<DetailedStatisticsItem> detailed = new ArrayList<>();
         List<Site> sitesList = sites.getSites();
         for(int i = 0; i < sitesList.size(); i++) {
@@ -49,22 +39,17 @@ public class StatisticsServiceImpl implements StatisticsService {
             DetailedStatisticsItem item = new DetailedStatisticsItem();
             item.setName(site.getName());
             item.setUrl(site.getUrl());
-            int pages = pageRepository.countBySiteId(siteEntity); /*random.nextInt(1_000);*/
-            int lemmas = lemmaRepository.countBySiteId(siteEntity);/*pages * random.nextInt(1_000);*/
+            int pages = pageRepository.countBySiteId(siteEntity);
+            int lemmas = lemmaRepository.countBySiteId(siteEntity);
             item.setPages(pages);
             item.setLemmas(lemmas);
-//            item.setStatus(statuses[i % 3]);
             item.setStatus(siteEntity.getStatus());
-//            item.setError(errors[i % 3]);
             item.setError(siteEntity.getLastError());
-//            item.setStatusTime(System.currentTimeMillis() -
-//                    (random.nextInt(10_000)));
             item.setStatusTime(siteEntity.getStatusTime());
             total.setPages(total.getPages() + pages);
             total.setLemmas(total.getLemmas() + lemmas);
             detailed.add(item);
         }
-
         StatisticsResponse response = new StatisticsResponse();
         StatisticsData data = new StatisticsData();
         data.setTotal(total);

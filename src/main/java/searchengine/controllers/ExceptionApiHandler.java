@@ -3,6 +3,7 @@ package searchengine.controllers;
 import org.apache.tomcat.websocket.AuthenticationException;
 import org.hibernate.procedure.NoSuchParameterException;
 import org.hibernate.resource.beans.container.internal.NoSuchBeanException;
+import org.jsoup.HttpStatusException;
 import org.springframework.boot.context.properties.bind.BindException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -58,7 +59,12 @@ public class ExceptionApiHandler {
     }
 
     @ExceptionHandler(MethodNotAllowedException.class)
-    public ResponseEntity<Message> MethodNotAllowed(MethodNotAllowedException methodNotAllowedException){
-        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(new Message(false,"Метод не поддерживается"));
+    public ResponseEntity<Message> MethodNotAllowed(MethodNotAllowedException methodNotAllowedException) {
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(new Message(false, "Метод не поддерживается"));
+    }
+
+    @ExceptionHandler(HttpStatusException.class)
+    public ResponseEntity<Message> HttpStatusException(HttpStatusException httpStatusException) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new Message(false, "Доступ к сайту запрещен"));
     }
 }

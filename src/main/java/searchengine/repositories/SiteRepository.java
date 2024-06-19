@@ -11,7 +11,5 @@ import searchengine.model.Status;
 public interface SiteRepository extends JpaRepository<SiteEntity, Integer> {
     SiteEntity findIdByUrl(String url);
     SiteEntity findIdByName(String name);
-    @Modifying
-    @Query("update SiteEntity s set s.status = ?1 where s.name = ?2")
-    String setStatusFor(Status status, String siteName);
+
 }

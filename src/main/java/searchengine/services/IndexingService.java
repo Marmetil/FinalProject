@@ -2,10 +2,10 @@ package searchengine.services;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jsoup.HttpStatusException;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import searchengine.config.Referrer;
 import searchengine.config.Site;
-import searchengine.config.UserAgent;
 import searchengine.model.SiteMapBuilder;
 import searchengine.config.SitesList;
 import searchengine.model.*;
@@ -20,7 +20,6 @@ import java.util.concurrent.ForkJoinPool;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-//@NoArgsConstructor
 public class IndexingService {
     private final SiteRepository siteRepository;
     private final PageRepository pageRepository;
@@ -31,8 +30,7 @@ public class IndexingService {
 
     private static final List<ForkJoinPool> forkJoinPoolList = new ArrayList<>();
 
-
-    public void startIndexing(){
+    public void startIndexing() {
         List<SiteEntity> siteEntities = new ArrayList<>();
         if(indexingStateRepository.findById(1).isEmpty()){
             IndexingState newState = new IndexingState();
@@ -60,22 +58,32 @@ public class IndexingService {
                 siteEntities.add(newSiteEntity);
         }
         for (SiteEntity site : siteEntities){
+            long start = System.currentTimeMillis();
             SiteMap siteMap = new SiteMap(site.getUrl());
             Site newSite = makeSite(site);
             SiteMapBuilder task = new SiteMapBuilder(siteMap, siteRepository, pageRepository, newSite, indexingStateRepository,
                     siteList, lemmaRepository, indexRepository);
-                   ForkJoinPool forkJoinPool = new ForkJoinPool();
-                   forkJoinPool.invoke(task);
-                   forkJoinPoolList.add(forkJoinPool);
-
-                   SiteEntity siteEntity = siteRepository.findIdByName(site.getName());
-                   if(siteEntity.getLastError() == null){
-                       siteEntity.setStatus(Status.INDEXED);
-                   } else {
-                       siteEntity.setStatus(Status.FAILED);
-                   }
-                   siteRepository.save(siteEntity);
-                   log.info("Индексация окончена " + site.getName());
+            if(task.isCancelled()){
+                continue;
+            }
+            ForkJoinPool forkJoinPool = new ForkJoinPool();
+            forkJoinPool.invoke(task);
+            forkJoinPoolList.add(forkJoinPool);
+            SiteEntity siteEntity = siteRepository.findIdByName(site.getName());
+            if(pageRepository.countBySiteId(siteEntity) == 0 && lemmaRepository.countBySiteId(siteEntity) == 0){
+                siteEntity.setStatus(Status.FAILED);
+                siteEntity.setLastError("Доступ к сайту запрещен");
+            }
+            if(task.isDone()|| task.isCompletedNormally()){
+                siteEntity.setStatus(siteEntity.getLastError() == null ? Status.INDEXED : Status.FAILED);
+            }
+            if(task.isCancelled() || task.isCompletedAbnormally()){
+                siteEntity.setStatus(Status.FAILED);
+                siteEntity.setLastError("Возникла ошибка");
+            }
+            siteRepository.save(siteEntity);
+                   long end = System.currentTimeMillis();
+                   log.info("Индексация окончена " + site.getName() + " за " + (end - start));
                    task.allLinksCleaner();
         }
     }
@@ -94,9 +102,7 @@ public class IndexingService {
                 siteRepository.save(siteEntity);
             }
         }
-
     }
-
     public void IndexPage(String url) throws IOException {
         LemmaCounter lemmaCounter = new LemmaCounter(siteRepository, pageRepository,
                 siteList, lemmaRepository,indexRepository);
@@ -114,5 +120,4 @@ public class IndexingService {
         site.setUrl(siteEntity.getUrl());
         return site;
     }
-
 }

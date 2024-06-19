@@ -15,13 +15,4 @@ public class DefaultController {
     public String index() {
         return "index";
     }
-
-//    @PostMapping
-//    public void startIndexing(){
-//        String url = "https://laserbeauty.kz";
-//        SiteMap siteMap = new SiteMap(url);
-//        IndexingService task = new IndexingService(siteMap);
-//        new ForkJoinPool().invoke(task);
-//
-//    }
 }

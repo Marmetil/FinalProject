@@ -13,23 +13,12 @@ import java.util.List;
 
 @Repository
 public interface PageRepository extends JpaRepository<Page, Integer> {
-    Page findIdByPath(String path);
-
+  Page findIdByPath(String path);
   Integer countBySiteId(SiteEntity siteEntity);
 
     @Modifying
     @Transactional
     @Query(value = "DELETE FROM Page p WHERE p.siteId = :site_id" )
     void deletePage(@Param("site_id") SiteEntity siteId);
-
-    Page findBySiteId(SiteEntity siteId);
-
-    @Modifying
-//    @Transactional
-    @Query(value = "SELECT p FROM Page p WHERE p.siteId = :site_id")
-    List<Page> findAllPageBySiteId(@Param("site_id") SiteEntity siteEntity);
-
-//    @Transactional
-//    void deleteBySiteId(SiteEntity siteId);
 
 }

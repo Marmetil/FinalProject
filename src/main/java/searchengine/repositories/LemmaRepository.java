@@ -15,14 +15,8 @@ import java.util.List;
 @Repository
 public interface LemmaRepository extends JpaRepository<Lemma, Integer> {
     Lemma findByLemma(String lemma);
+    Lemma findByLemmaAndSiteId(String lemma, SiteEntity siteEntity);
     Integer countBySiteId(SiteEntity siteEntity);
-
-//    @Modifying
-//    @Query("SELECT l  FROM Lemma l WHERE l.id IN " +
-//            "(SELECT l.id FROM Lemma l INNER JOIN Index i ON l.id = i.lemmaId.id " +
-//            "INNER JOIN Page p ON p.id = i.pageId.id WHERE p.id = :page_id AND p.siteId.id = l.siteId.id AND l.frequency = 0)")
-//    List<Lemma> lemmaToDelete(@Param("page_id") Integer page_id);
-
 
     @Modifying
     @Query("SELECT  l FROM Lemma l WHERE l.id IN " +
@@ -41,6 +35,9 @@ public interface LemmaRepository extends JpaRepository<Lemma, Integer> {
     void deleteLemmaBySiteId(@Param("site_id") SiteEntity siteEntity);
 
     @Modifying
-    @Query("SELECT l FROM Lemma l WHERE l.frequency = 0")
-    List<Lemma> lemmaToDelete();
+    @Transactional
+    @Query(nativeQuery = true, value = "INSERT INTO lemma (site_id, lemma, frequency)" +
+            "VALUES (:site_id, :lemma, 1) " +
+            "ON DUPLICATE KEY UPDATE frequency = frequency + 1 ")
+    void fillInLemma(@Param("site_id") Integer site_id, @Param("lemma") String lemma);
 }

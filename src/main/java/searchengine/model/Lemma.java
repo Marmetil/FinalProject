@@ -1,13 +1,16 @@
 package searchengine.model;
 
 import jakarta.persistence.*;
+import jakarta.persistence.Index;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
+import org.springframework.stereotype.Component;
 
 @Setter
 @Getter
 @Entity
+@Table(indexes = {@Index(name = "lemma_index", columnList = "lemma, site_id", unique = true)})
 @RequiredArgsConstructor
 public class Lemma {
     @Id
