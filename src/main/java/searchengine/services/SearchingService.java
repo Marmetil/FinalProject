@@ -42,13 +42,7 @@ public class SearchingService {
         ArrayList<String> allLemmas = new ArrayList<>();
         HashMap<String, Integer> lemmaCount = new HashMap<>();
         for (String word : allWords){
-            List<String> partOfSpeech = luceneMorph.getMorphInfo(word);
-            partOfSpeech.forEach(p-> {
-                if (!p.toUpperCase().contains("СОЮЗ") && !p.toUpperCase().contains("МЕЖД") && !p.toUpperCase().contains("ПРЕДЛ")) {
-                    List<String> lemmas = luceneMorph.getNormalForms(word);
-                    allLemmas.addAll(lemmas);
-                }
-            });
+            fillAllLemmas(word, allLemmas);
         }
         for (String lemma: allLemmas){
             if(!lemmaCount.containsKey(lemma)){
@@ -95,16 +89,7 @@ public class SearchingService {
             for (Index index : indexList) {
                 pageIdList.add(index.getPageId());
             }
-            for (int i = 1; i < sortedLemmas.size(); i++) {
-                List<Page> newPageIdList = new ArrayList<>();
-                for (Page page : pageIdList) {
-                    Index index = indexRepository.findByLemmaIdAndPageId(sortedLemmas.get(i), page);
-                    if (!(index == null)) {
-                        newPageIdList.add(index.getPageId());
-                    }
-                    pageIdList = newPageIdList;
-                }
-            }
+            filterPageList(sortedLemmas, pageIdList);
             if (pageIdList.isEmpty()) {
                 return Collections.EMPTY_LIST;
             } else {
@@ -130,21 +115,9 @@ public class SearchingService {
                 searchingResponse.setError("Задан пустой поисковый запрос");
                 searchingResponse.setData(null);
                 } else {
-                    List<SearchingData> displaySearchingDataList = new ArrayList<>();
-                    if(offset + limit <= pageListToResponse.size()){
-                        List<RelativePageRelevance> newPageListToResponse = new ArrayList<>();
-                        for(int i = offset; i < offset + limit; i++){
-                            newPageListToResponse.add(pageListToResponse.get(i));
-                        }
-                        displaySearchingDataList = searchingDataListMaker(newPageListToResponse,query);
-                    }  else {
-                        displaySearchingDataList = searchingDataListMaker(pageListToResponse, query);
-                    }
-                searchingResponse.setResult(true);
-                searchingResponse.setCount(pageListToResponse.size());
-                searchingResponse.setData(displaySearchingDataList);
-            }
-        }catch (NullPointerException e){
+                    fillSearchingResponse(offset, limit, pageListToResponse, searchingResponse, query);
+                }
+            }catch (NullPointerException e){
             searchingResponse.setResult(true);
             searchingResponse.setData(Collections.EMPTY_LIST);
         }
@@ -161,19 +134,10 @@ public class SearchingService {
         Map<WordPosition, List<String>> wordLemmaMap = wordLemmaMapMaker(text);
         Map<WordPosition, List<String>> requestedWordsLemmaMap = new HashMap<>();
         Map<String, List<String>> requestedLemmas = requestedLemmasGetter(query);
-        int snippetSize = 300;
+        int snippetSize = 200;
         int partialSnippetSize = snippetSize/ requestedLemmas.size();
-
-       List<WordPosition> sortedRequestedWords = new ArrayList<>();
-          for (Map.Entry<String, List<String>> entry : requestedLemmas.entrySet()){
-            for (Map.Entry<WordPosition, List<String>> entry1 : wordLemmaMap.entrySet()){
-                if(entry.getValue().equals(entry1.getValue())){
-                    sortedRequestedWords.add(entry1.getKey());
-                    requestedWordsLemmaMap.put(entry1.getKey(), entry.getValue());
-                    break;
-                }
-            }
-        }
+        List<WordPosition> sortedRequestedWords = new ArrayList<>();
+        fillRequestedWordLemmaMap(requestedWordsLemmaMap, sortedRequestedWords, requestedLemmas, wordLemmaMap);
         sortedRequestedWords.sort(Comparator.comparing(WordPosition::getIndexOfWord));
         String snippet = snippetMaker(sortedRequestedWords, text, snippetSize, partialSnippetSize);
         return wordsHighLighter(snippet, requestedWordsLemmaMap);
@@ -242,7 +206,7 @@ public class SearchingService {
             searchingData.setRelevance(relativePageRelevance.getRelativeRelevance());
             searchingData.setTitle(pageTitleGetter(pageUrl));
             searchingData.setSnippet(snippetGetter(query, pageUrl));
-            searchingData.setUrl(relativePageRelevance.getPage().getPath());
+            searchingData.setUri(relativePageRelevance.getPage().getPath());
             searchingDataList.add(searchingData);
         }
         return searchingDataList;
@@ -254,22 +218,12 @@ public class SearchingService {
         Map<String, List<String>> sippetLemmasMap = new HashMap<>();
         for (String snippetWord : snippetWords){
             try {
-                List<String> partOfSpeech = luceneMorph.getMorphInfo(snippetWord.toLowerCase());
-                partOfSpeech.stream().filter(p -> !p.toUpperCase().contains("СОЮЗ") && !p.toUpperCase().contains("МЕЖД") && !p.toUpperCase().contains("ПРЕДЛ"))
-                        .map(p -> luceneMorph.getNormalForms(snippetWord.toLowerCase()))
-                        .forEach(lemmas -> sippetLemmasMap.put(snippetWord, lemmas));
+                fillSnippetLemmasMap(snippetWord, sippetLemmasMap);
             }  catch (ArrayIndexOutOfBoundsException | WrongCharaterException exception){
                 continue;
             }
         }
-        for (Map.Entry<String, List<String>> entry : sippetLemmasMap.entrySet()){
-            for (Map.Entry<WordPosition, List<String>> entry1 : requestedWordsLemmaMap.entrySet()){
-                if(entry.getValue().equals(entry1.getValue())){
-                    snippet = snippet.replaceAll(entry.getKey(), "<b>" + entry.getKey() + "</b>");
-                }
-            }
-        }
-        return snippet;
+        return highlightWord(snippet, sippetLemmasMap, requestedWordsLemmaMap);
     }
     private List<RelativePageRelevance> relativePageGetter(List<Page> pageIdList, List<Lemma> sortedLemmas) {
         List<RelativePageRelevance> relativePageRelevanceList = new ArrayList<>();
@@ -294,6 +248,71 @@ public class SearchingService {
         relativePageRelevanceList.sort(Comparator.comparing(RelativePageRelevance::getRelativeRelevance).reversed());
         return relativePageRelevanceList;
     }
+    private void  fillAllLemmas(String word, List<String> allLemmas){
+        List<String> partOfSpeech = luceneMorph.getMorphInfo(word);
+        partOfSpeech.forEach(p-> {
+            if (!p.toUpperCase().contains("СОЮЗ") && !p.toUpperCase().contains("МЕЖД") && !p.toUpperCase().contains("ПРЕДЛ")) {
+                List<String> lemmas = luceneMorph.getNormalForms(word);
+                allLemmas.addAll(lemmas);
+            }
+        });
+    }
+    private void filterPageList(List<Lemma> sortedLemmas, List<Page> pageIdList){
+        for (int i = 1; i < sortedLemmas.size(); i++) {
+            List<Page> newPageIdList = new ArrayList<>();
+            for (Page page : pageIdList) {
+                Index index = indexRepository.findByLemmaIdAndPageId(sortedLemmas.get(i), page);
+                if (!(index == null)) {
+                    newPageIdList.add(index.getPageId());
+                }
+                pageIdList = newPageIdList;
+            }
+        }
+    }
+    private void  fillSearchingResponse(int offset, int limit, List<RelativePageRelevance> pageListToResponse,
+                                        SearchingResponse searchingResponse, String query) throws IOException {
+        List<SearchingData> displaySearchingDataList = new ArrayList<>();
+        if(offset + limit <= pageListToResponse.size()){
+            List<RelativePageRelevance> newPageListToResponse = new ArrayList<>();
+            for(int i = offset; i < offset + limit; i++){
+                newPageListToResponse.add(pageListToResponse.get(i));
+            }
+            displaySearchingDataList = searchingDataListMaker(newPageListToResponse,query);
+        }else {
+            displaySearchingDataList = searchingDataListMaker(pageListToResponse, query);
+        }
+        searchingResponse.setResult(true);
+        searchingResponse.setCount(pageListToResponse.size());
+        searchingResponse.setData(displaySearchingDataList);
+    }
+    private void fillSnippetLemmasMap(String snippetWord, Map<String, List<String>> sippetLemmasMap){
+        List<String> partOfSpeech = luceneMorph.getMorphInfo(snippetWord.toLowerCase());
+                partOfSpeech.stream().filter(p -> !p.toUpperCase().contains("СОЮЗ") && !p.toUpperCase().contains("МЕЖД") && !p.toUpperCase().contains("ПРЕДЛ"))
+                        .map(p -> luceneMorph.getNormalForms(snippetWord.toLowerCase()))
+                        .forEach(lemmas -> sippetLemmasMap.put(snippetWord, lemmas));
+    }
+    private String highlightWord(String snippet, Map<String, List<String>> sippetLemmasMap, Map<WordPosition, List<String>>  requestedWordsLemmaMap){
+        for (Map.Entry<String, List<String>> entry : sippetLemmasMap.entrySet()){
+            for (Map.Entry<WordPosition, List<String>> entry1 : requestedWordsLemmaMap.entrySet()){
+                if(entry.getValue().contains(entry1.getValue().get(0))){
+                    snippet = snippet.replaceAll(entry.getKey(), "<b>" + entry.getKey() + "</b>");
+                }
+            }
+        } return snippet;
+    }
+    private void fillRequestedWordLemmaMap(Map<WordPosition, List<String>> requestedWordsLemmaMap, List<WordPosition> sortedRequestedWords,
+                                           Map<String, List<String>> requestedLemmas, Map<WordPosition, List<String>> wordLemmaMap){
+        for (Map.Entry<String, List<String>> entry : requestedLemmas.entrySet()){
+            for (Map.Entry<WordPosition, List<String>> entry1 : wordLemmaMap.entrySet()){
+                if(entry.getValue().contains(entry1.getValue().get(0))){
+                    sortedRequestedWords.add(entry1.getKey());
+                    requestedWordsLemmaMap.put(entry1.getKey(), entry.getValue());
+                    break;
+                }
+            }
+        }
+    }
+
 }
 
 

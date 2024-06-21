@@ -6,7 +6,7 @@ import lombok.Data;
 public class SearchingData {
     private String site;
     private String siteName;
-    private String url;
+    private String uri;
     private String title;
     private String snippet;
     private  float relevance;

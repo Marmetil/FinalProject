@@ -31,6 +31,14 @@ public class LemmaCounter {
     private final SitesList siteList;
     private final LemmaRepository lemmaRepository;
     private final IndexRepository indexRepository;
+    private LuceneMorphology luceneMorph;
+    {
+        try {
+            luceneMorph = new RussianLuceneMorphology();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     public HashMap<String, Integer> splitTextIntoWords(String text) throws IOException {
         text = text.replaceAll("[^\s^а-яА-Я]", "");
@@ -38,17 +46,18 @@ public class LemmaCounter {
         ArrayList<String> allWords = new ArrayList<>(Arrays.asList(words));
         ArrayList<String> allLemmas = new ArrayList<>();
         HashMap<String, Integer> lemmaCount = new HashMap<>();
-        LuceneMorphology luceneMorph = new RussianLuceneMorphology();
+//        LuceneMorphology luceneMorph = new RussianLuceneMorphology();
 
         for (String word : allWords) {
             try {
-                List<String> partOfSpeech = luceneMorph.getMorphInfo(word);
-                partOfSpeech.forEach(p -> {
-                    if (!p.toUpperCase().contains("СОЮЗ") && !p.toUpperCase().contains("МЕЖД") && !p.toUpperCase().contains("ПРЕДЛ")) {
-                        List<String> lemmas = luceneMorph.getNormalForms(word);
-                        allLemmas.addAll(lemmas);
-                    }
-                });
+//                List<String> partOfSpeech = luceneMorph.getMorphInfo(word);
+//                partOfSpeech.forEach(p -> {
+//                    if (!p.toUpperCase().contains("СОЮЗ") && !p.toUpperCase().contains("МЕЖД") && !p.toUpperCase().contains("ПРЕДЛ")) {
+//                        List<String> lemmas = luceneMorph.getNormalForms(word);
+//                        allLemmas.addAll(lemmas);
+//                    }
+//                });
+                fillAllLemmas(word, allLemmas);
             } catch (ArrayIndexOutOfBoundsException e) {
                 continue;
             }
@@ -58,6 +67,7 @@ public class LemmaCounter {
                 lemmaCount.put(lemma, 0);
             }
             lemmaCount.put(lemma, lemmaCount.get(lemma) + 1);
+
         }
         return lemmaCount;
     }
@@ -90,7 +100,6 @@ public class LemmaCounter {
     }
 
     private String htmlGetter(String url) throws IOException {
-
         Document document = Jsoup.connect(url)
                 .userAgent("Mozilla/5.0 (Windows; U; WindowsNT 5.1; en-US; rv1.8.1.6) Gecko/20070725 Firefox/2.0.0.6")
                 .referrer("http://www.google.com")
@@ -116,17 +125,18 @@ public class LemmaCounter {
     public void IndexPage(String url) throws IOException {
         SiteEntity siteEntity = siteRepository.findIdByUrl(urlRootFinder(url));
         if (siteEntity == null) {
-            for (Site site : siteList.getSites()) {
-                if (site.getUrl().equals(urlRootFinder(url))) {
-                    SiteEntity newSiteEntity = new SiteEntity();
-                    newSiteEntity.setStatus(Status.INDEXING);
-                    newSiteEntity.setUrl(urlRootFinder(url));
-                    newSiteEntity.setName(site.getName());
-                    newSiteEntity.setLastError(null);
-                    newSiteEntity.setStatusTime(LocalDateTime.now());
-                    siteRepository.save(newSiteEntity);
-                }
-            }
+//            for (Site site : siteList.getSites()) {
+//                if (site.getUrl().equals(urlRootFinder(url))) {
+//                    SiteEntity newSiteEntity = new SiteEntity();
+//                    newSiteEntity.setStatus(Status.INDEXING);
+//                    newSiteEntity.setUrl(urlRootFinder(url));
+//                    newSiteEntity.setName(site.getName());
+//                    newSiteEntity.setLastError(null);
+//                    newSiteEntity.setStatusTime(LocalDateTime.now());
+//                    siteRepository.save(newSiteEntity);
+//                }
+//            }
+            saveNewSiteEntity(url, siteList);
         }
         Page page = pageRepository.findIdByPath(pathFinder(url));
         String htmlText = htmlGetter(url);
@@ -140,16 +150,47 @@ public class LemmaCounter {
             lemmaRepository.deleteLemma();
             pageRepository.delete(page);
         }
+//        Page newPage = new Page();
+//        newPage.setCode(responseCodeGetter(url));
+//        newPage.setContent(htmlText);
+//        newPage.setPath(pathFinder(url));
+//        newPage.setSiteId(siteRepository.findIdByUrl(urlRootFinder(url)));
+//        pageRepository.save(newPage);
+        saveNewPage(url, htmlText);
+        String text = htmlToText(htmlText);
+        HashMap<String, Integer> lemmaCount = splitTextIntoWords(text);
+        fillInLemma(lemmaCount, siteRepository.findIdByUrl(urlRootFinder(url)));
+        fillInIndex(lemmaCount, pageRepository.findIdByPath(pathFinder(url)));
+    }
+    private void fillAllLemmas(String word, ArrayList<String> allLemmas){
+        List<String> partOfSpeech = luceneMorph.getMorphInfo(word);
+        partOfSpeech.forEach(p -> {
+            if (!p.toUpperCase().contains("СОЮЗ") && !p.toUpperCase().contains("МЕЖД") && !p.toUpperCase().contains("ПРЕДЛ")) {
+                List<String> lemmas = luceneMorph.getNormalForms(word);
+                allLemmas.addAll(lemmas);
+            }
+        });
+    }
+    private void saveNewSiteEntity(String url, SitesList siteList){
+        for (Site site : siteList.getSites()) {
+            if (site.getUrl().equals(urlRootFinder(url))) {
+                SiteEntity newSiteEntity = new SiteEntity();
+                newSiteEntity.setStatus(Status.INDEXING);
+                newSiteEntity.setUrl(urlRootFinder(url));
+                newSiteEntity.setName(site.getName());
+                newSiteEntity.setLastError(null);
+                newSiteEntity.setStatusTime(LocalDateTime.now());
+                siteRepository.save(newSiteEntity);
+            }
+        }
+    }
+    private void saveNewPage(String url, String htmlText) throws IOException {
         Page newPage = new Page();
         newPage.setCode(responseCodeGetter(url));
         newPage.setContent(htmlText);
         newPage.setPath(pathFinder(url));
         newPage.setSiteId(siteRepository.findIdByUrl(urlRootFinder(url)));
         pageRepository.save(newPage);
-        String text = htmlToText(htmlText);
-        HashMap<String, Integer> lemmaCount = splitTextIntoWords(text);
-        fillInLemma(lemmaCount, siteRepository.findIdByUrl(urlRootFinder(url)));
-        fillInIndex(lemmaCount, pageRepository.findIdByPath(pathFinder(url)));
     }
 }
 

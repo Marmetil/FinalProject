@@ -53,29 +53,10 @@ public class SiteMapBuilder extends RecursiveAction {
             }
             allLinks.add(link);
             siteMap.addChild(new SiteMap(link));
-
             Page page = new Page();
-            page.setPath(pathFinder(link));
-            page.setSiteId(siteRepository.findIdByUrl(urlRootFinder(link)));
-            try {
-                page.setCode(responseCodeGetter(link));
-            } catch (IOException e) {
-                page.setCode(HttpStatus.BAD_REQUEST.value());
-            }
-            try {
-                page.setContent(htmlGetter(link));
-            } catch (IOException e) {
-                page.setContent("Ошибка  получения контента");
-            }
-            pageRepository.save(page);
+            savePage(page, link);
             if(page.getCode() < 400) {
-                LemmaWriter lemmaWriter = new LemmaWriter(siteRepository, pageRepository, sitesList, lemmaRepository, indexRepository, link);
-                lemmaWriter.start();
-                try {
-                    lemmaWriter.join();
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
+               startLemmaWriter(link);
             }
             SiteEntity siteEntity1 = siteRepository.findIdByName(site.getName());
             siteEntity1.setStatusTime(LocalDateTime.now());
@@ -83,14 +64,14 @@ public class SiteMapBuilder extends RecursiveAction {
         }
         List<SiteMapBuilder> taskList = new ArrayList<>();
         for (SiteMap child : siteMap.getChildLinks()) {
-            SiteMapBuilder task = new SiteMapBuilder(child, siteRepository, pageRepository, site, indexingStateRepository, sitesList, lemmaRepository, indexRepository);
+            SiteMapBuilder task = new SiteMapBuilder(child, siteRepository, pageRepository, site,
+                    indexingStateRepository, sitesList, lemmaRepository, indexRepository);
             task.fork();
             taskList.add(task);
         }
         for (SiteMapBuilder task : taskList) {
             task.join();
         }
-
     }
 
     public ConcurrentSkipListSet<String> linksExecutor(String url) throws IOException, InterruptedException {
@@ -161,6 +142,32 @@ public class SiteMapBuilder extends RecursiveAction {
 
     public void allLinksCleaner() {
         allLinks.clear();
+    }
+    private void savePage(Page page, String link){
+        page.setPath(pathFinder(link));
+        page.setSiteId(siteRepository.findIdByUrl(urlRootFinder(link)));
+        try {
+            page.setCode(responseCodeGetter(link));
+        } catch (IOException e) {
+            page.setCode(HttpStatus.BAD_REQUEST.value());
+        }
+        try {
+            page.setContent(htmlGetter(link));
+        } catch (IOException e) {
+            page.setContent("Ошибка  получения контента");
+        }
+        pageRepository.save(page);
+    }
+
+    private void startLemmaWriter(String link){
+        LemmaWriter lemmaWriter = new LemmaWriter(siteRepository, pageRepository,
+                sitesList, lemmaRepository, indexRepository, link);
+        lemmaWriter.start();
+        try {
+            lemmaWriter.join();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
     }
 
 }

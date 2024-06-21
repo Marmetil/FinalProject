@@ -18,18 +18,16 @@ spring:
 
 indexing-settings:
   sites:
-    - url: https://playback.ru
-      name: PlayBack
-    - url: https://www.svetlovka.ru
-      name: Svetlovka
+#    - url: https://www.svetlovka.ru
+#      name: Svetlovka
+#    - url: https://nikoartgallery.com
+#      name: Niko
     - url: https://laserbeauty.kz
       name: Laser
-    - url: https://rklinik.kz
-      name: Rakhat
-    - url: https://nikoartgallery.com
-      name: Niko
-    - url: https://dombulgakova.ru
-      name: Bulgakov
+#    - url: https://rklinik.kz
+#      name: Rakhat
+#    - url: https://dombulgakova.ru
+#      name: Bulgakov
 
 
 

@@ -2,8 +2,6 @@ package searchengine.services;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.jsoup.HttpStatusException;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import searchengine.config.Site;
 import searchengine.model.SiteMapBuilder;
@@ -40,25 +38,16 @@ public class IndexingService {
         for (Site site : siteList.getSites()){
             SiteEntity siteEntity = siteRepository.findIdByName(site.getName());
             if(!(siteEntity == null)) {
-                List<Index> indexesToDelete = indexRepository.findIndexBySiteId(siteEntity.getId());
-                for (Index index : indexesToDelete){
-                    indexRepository.delete(index);
-                }
+                deleteIndexes(siteEntity.getId());
                 lemmaRepository.deleteLemmaBySiteId(siteEntity);
                 pageRepository.deletePage(siteEntity);
                 siteRepository.delete(siteEntity);
             }
             SiteEntity newSiteEntity = new SiteEntity();
-            newSiteEntity.setStatusTime(LocalDateTime.now());
-                newSiteEntity.setLastError(null);
-                newSiteEntity.setUrl(site.getUrl());
-                newSiteEntity.setName(site.getName());
-                newSiteEntity.setStatus(Status.INDEXING);
-                siteRepository.save(newSiteEntity);
-                siteEntities.add(newSiteEntity);
+            saveNewSiteEntity(newSiteEntity, site);
+            siteEntities.add(newSiteEntity);
         }
         for (SiteEntity site : siteEntities){
-            long start = System.currentTimeMillis();
             SiteMap siteMap = new SiteMap(site.getUrl());
             Site newSite = makeSite(site);
             SiteMapBuilder task = new SiteMapBuilder(siteMap, siteRepository, pageRepository, newSite, indexingStateRepository,
@@ -70,21 +59,7 @@ public class IndexingService {
             forkJoinPool.invoke(task);
             forkJoinPoolList.add(forkJoinPool);
             SiteEntity siteEntity = siteRepository.findIdByName(site.getName());
-            if(pageRepository.countBySiteId(siteEntity) == 0 && lemmaRepository.countBySiteId(siteEntity) == 0){
-                siteEntity.setStatus(Status.FAILED);
-                siteEntity.setLastError("Доступ к сайту запрещен");
-            }
-            if(task.isDone()|| task.isCompletedNormally()){
-                siteEntity.setStatus(siteEntity.getLastError() == null ? Status.INDEXED : Status.FAILED);
-            }
-            if(task.isCancelled() || task.isCompletedAbnormally()){
-                siteEntity.setStatus(Status.FAILED);
-                siteEntity.setLastError("Возникла ошибка");
-            }
-            siteRepository.save(siteEntity);
-                   long end = System.currentTimeMillis();
-                   log.info("Индексация окончена " + site.getName() + " за " + (end - start));
-                   task.allLinksCleaner();
+            saveSiteEntity(siteEntity, task);
         }
     }
     public void stopIndexing(){
@@ -95,7 +70,6 @@ public class IndexingService {
         forkJoinPoolList.clear();
         for (Site site : siteList.getSites()) {
             SiteEntity siteEntity = siteRepository.findIdByName(site.getName());
-
             if(siteEntity.getStatus().equals(Status.INDEXING)){
                 siteEntity.setStatus(Status.FAILED);
                 siteEntity.setLastError("Индексация остановлена пользователем");
@@ -119,5 +93,36 @@ public class IndexingService {
         site.setName(siteEntity.getName());
         site.setUrl(siteEntity.getUrl());
         return site;
+    }
+    private void deleteIndexes(int siteId){
+        List<Index> indexesToDelete = indexRepository.findIndexBySiteId(siteId);
+                for (Index index : indexesToDelete){
+                    indexRepository.delete(index);
+                }
+    }
+    private void saveNewSiteEntity(SiteEntity newSiteEntity, Site site){
+        newSiteEntity.setStatusTime(LocalDateTime.now());
+        newSiteEntity.setLastError(null);
+        newSiteEntity.setUrl(site.getUrl());
+        newSiteEntity.setName(site.getName());
+        newSiteEntity.setStatus(Status.INDEXING);
+        siteRepository.save(newSiteEntity);
+    }
+    private void saveSiteEntity(SiteEntity  siteEntity, SiteMapBuilder task){
+        if(pageRepository.countBySiteId(siteEntity) == 0 && lemmaRepository.countBySiteId(siteEntity) == 0){
+            siteEntity.setStatus(Status.FAILED);
+            siteEntity.setLastError("Доступ к сайту запрещен");
+        }
+        if(task.isDone()|| task.isCompletedNormally()){
+            siteEntity.setStatus(siteEntity.getLastError() == null ? Status.INDEXED : Status.FAILED);
+        }
+        if(task.isCancelled() || task.isCompletedAbnormally()){
+            siteEntity.setStatus(Status.FAILED);
+            siteEntity.setLastError("Возникла ошибка");
+        }
+        siteRepository.save(siteEntity);
+        long end = System.currentTimeMillis();
+        log.info("Индексация окончена " +siteEntity.getName());
+        task.allLinksCleaner();
     }
 }
